@@ -230,13 +230,76 @@
 //! [`stream_recv()`]: struct.Connection.html#method.stream_recv
 //! [HTTP/3 module]: h3/index.html
 
+#![no_std]
 #![warn(missing_docs)]
 
 #[macro_use]
 extern crate log;
 
-use std::cmp;
-use std::time;
+#[macro_use]
+extern crate alloc;
+
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use core::cmp;
+use core::time;
+
+/// A `no_std` compatible version of `std::time::Instant`.
+#[derive(Copy, Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct Instant {
+    /// Elapsed time since some unspecified epoch
+    since_epoch: time::Duration,
+}
+
+impl Instant {
+    /// Get the current time. This needs to be modified to suit your OS.
+    pub fn now() -> Instant {
+        Instant {
+            since_epoch: time::Duration::new(100, 10),
+        }
+    }
+
+    /// Calculate the difference between now and some time in the past.
+    pub fn elapsed(&self) -> time::Duration {
+        let now = Instant::now();
+        now.since_epoch - self.since_epoch
+    }
+
+    /// Calculate the time duration between some `past_instant` and now.
+    pub fn duration_since(&self, past_instant: Instant) -> time::Duration {
+        self.since_epoch - past_instant.since_epoch
+    }
+}
+
+impl core::ops::Add<time::Duration> for Instant {
+    type Output = Instant;
+
+    fn add(self, rhs: time::Duration) -> Instant {
+        Instant {
+            since_epoch: self.since_epoch + rhs,
+        }
+    }
+}
+
+impl core::ops::Sub<time::Duration> for Instant {
+    type Output = Instant;
+
+    fn sub(self, rhs: time::Duration) -> Instant {
+        Instant {
+            since_epoch: self.since_epoch - rhs,
+        }
+    }
+}
+
+impl core::ops::Sub<Instant> for Instant {
+    type Output = time::Duration;
+
+    fn sub(self, rhs: Instant) -> time::Duration {
+        self.since_epoch - rhs.since_epoch
+    }
+}
 
 /// The current QUIC wire version.
 pub const PROTOCOL_VERSION: u32 = 0xff00_0017;
@@ -263,32 +326,32 @@ const MAX_AMPLIFICATION_FACTOR: usize = 3;
 /// This type is used throughout quiche's public API for any operation that
 /// can produce an error.
 ///
-/// [`Result`]: https://doc.rust-lang.org/std/result/enum.Result.html
-pub type Result<T> = std::result::Result<T, Error>;
+/// [`Result`]: https://doc.rust-lang.org/core/result/enum.Result.html
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// A QUIC error.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub enum Error {
     /// There is no more work to do.
-    Done               = -1,
+    Done = -1,
 
     /// The provided buffer is too short.
-    BufferTooShort     = -2,
+    BufferTooShort = -2,
 
     /// The provided packet cannot be parsed because its version is unknown.
-    UnknownVersion     = -3,
+    UnknownVersion = -3,
 
     /// The provided packet cannot be parsed because it contains an invalid
     /// frame.
-    InvalidFrame       = -4,
+    InvalidFrame = -4,
 
     /// The provided packet cannot be parsed.
-    InvalidPacket      = -5,
+    InvalidPacket = -5,
 
     /// The operation cannot be completed because the connection is in an
     /// invalid state.
-    InvalidState       = -6,
+    InvalidState = -6,
 
     /// The operation cannot be completed because the stream is in an
     /// invalid state.
@@ -298,19 +361,19 @@ pub enum Error {
     InvalidTransportParam = -8,
 
     /// A cryptographic operation failed.
-    CryptoFail         = -9,
+    CryptoFail = -9,
 
     /// The TLS handshake failed.
-    TlsFail            = -10,
+    TlsFail = -10,
 
     /// The peer violated the local flow control limits.
-    FlowControl        = -11,
+    FlowControl = -11,
 
     /// The peer violated the local stream limits.
-    StreamLimit        = -12,
+    StreamLimit = -12,
 
     /// The received data exceeds the stream's final size.
-    FinalSize          = -13,
+    FinalSize = -13,
 }
 
 impl Error {
@@ -334,19 +397,13 @@ impl Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
-
-impl std::convert::From<octets::BufferTooShortError> for Error {
+impl core::convert::From<octets::BufferTooShortError> for Error {
     fn from(_err: octets::BufferTooShortError) -> Self {
         Error::BufferTooShort
     }
@@ -360,7 +417,7 @@ impl std::convert::From<octets::BufferTooShortError> for Error {
 #[repr(C)]
 pub enum Shutdown {
     /// Stop receiving stream data.
-    Read  = 0,
+    Read = 0,
 
     /// Stop sending stream data.
     Write = 1,
@@ -398,37 +455,6 @@ impl Config {
             application_protos: Vec::new(),
             grease: true,
         })
-    }
-
-    /// Configures the given certificate chain.
-    ///
-    /// The content of `file` is parsed as a PEM-encoded leaf certificate,
-    /// followed by optional intermediate certificates.
-    ///
-    /// ## Examples:
-    ///
-    /// ```no_run
-    /// # let mut config = quiche::Config::new(0xbabababa)?;
-    /// config.load_cert_chain_from_pem_file("/path/to/cert.pem")?;
-    /// # Ok::<(), quiche::Error>(())
-    /// ```
-    pub fn load_cert_chain_from_pem_file(&mut self, file: &str) -> Result<()> {
-        self.tls_ctx.use_certificate_chain_file(file)
-    }
-
-    /// Configures the given private key.
-    ///
-    /// The content of `file` is parsed as a PEM-encoded private key.
-    ///
-    /// ## Examples:
-    ///
-    /// ```no_run
-    /// # let mut config = quiche::Config::new(0xbabababa)?;
-    /// config.load_priv_key_from_pem_file("/path/to/key.pem")?;
-    /// # Ok::<(), quiche::Error>(())
-    /// ```
-    pub fn load_priv_key_from_pem_file(&mut self, file: &str) -> Result<()> {
-        self.tls_ctx.use_privkey_file(file)
     }
 
     /// Configures whether to verify the peer's certificate.
@@ -709,10 +735,10 @@ pub struct Connection {
     challenge: Option<Vec<u8>>,
 
     /// Idle timeout expiration time.
-    idle_timer: Option<time::Instant>,
+    idle_timer: Option<crate::Instant>,
 
     /// Draining timeout expiration time.
-    draining_timer: Option<time::Instant>,
+    draining_timer: Option<crate::Instant>,
 
     /// Whether this is a server-side connection.
     is_server: bool,
@@ -1085,7 +1111,7 @@ impl Connection {
                     // the connection.
                     self.close(false, e.to_wire(), b"").ok();
                     return Err(e);
-                },
+                }
             };
 
             done += read;
@@ -1097,7 +1123,7 @@ impl Connection {
 
     /// Processes a single QUIC packet received from the peer.
     fn recv_single(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let now = time::Instant::now();
+        let now = crate::Instant::now();
 
         if buf.is_empty() {
             return Err(Error::BufferTooShort);
@@ -1257,8 +1283,8 @@ impl Connection {
         // Select packet number space epoch based on the received packet's type.
         let epoch = hdr.ty.to_epoch()?;
 
-        let aead = if hdr.ty == packet::Type::ZeroRTT &&
-            self.pkt_num_spaces[epoch].crypto_0rtt_open.is_some()
+        let aead = if hdr.ty == packet::Type::ZeroRTT
+            && self.pkt_num_spaces[epoch].crypto_0rtt_open.is_some()
         {
             self.pkt_num_spaces[epoch]
                 .crypto_0rtt_open
@@ -1285,7 +1311,7 @@ impl Connection {
                     );
 
                     return Ok(header_len + payload_len);
-                },
+                }
             }
         };
 
@@ -1332,7 +1358,7 @@ impl Connection {
                     );
 
                     return Err(Error::Done);
-                },
+                }
             };
 
         if self.pkt_num_spaces[epoch].recv_pkt_num.contains(pn) {
@@ -1400,14 +1426,14 @@ impl Connection {
                             .recv_pkt_need_ack
                             .remove_until(largest_acked);
                     }
-                },
+                }
 
                 frame::Frame::Crypto { data } => {
                     self.pkt_num_spaces[epoch]
                         .crypto_stream
                         .send
                         .ack(data.off(), data.len());
-                },
+                }
 
                 frame::Frame::Stream { stream_id, data } => {
                     let stream = match self.streams.get_mut(stream_id) {
@@ -1422,7 +1448,7 @@ impl Connection {
                         let local = stream.local;
                         self.streams.collect(stream_id, local);
                     }
-                },
+                }
 
                 _ => (),
             }
@@ -1517,7 +1543,7 @@ impl Connection {
     /// # Ok::<(), quiche::Error>(())
     /// ```
     pub fn send(&mut self, out: &mut [u8]) -> Result<usize> {
-        let now = time::Instant::now();
+        let now = crate::Instant::now();
 
         if out.is_empty() {
             return Err(Error::BufferTooShort);
@@ -1566,7 +1592,7 @@ impl Connection {
             match lost {
                 frame::Frame::Crypto { data } => {
                     self.pkt_num_spaces[epoch].crypto_stream.send.push(data)?;
-                },
+                }
 
                 frame::Frame::Stream { stream_id, data } => {
                     let stream = match self.streams.get_mut(stream_id) {
@@ -1594,11 +1620,11 @@ impl Connection {
                     if (stream.is_flushable() || empty_fin) && !was_flushable {
                         self.streams.push_flushable(stream_id);
                     }
-                },
+                }
 
                 frame::Frame::ACK { .. } => {
                     self.pkt_num_spaces[epoch].ack_elicited = true;
-                },
+                }
 
                 _ => (),
             }
@@ -1654,8 +1680,8 @@ impl Connection {
             let ack_delay =
                 self.pkt_num_spaces[epoch].largest_rx_pkt_time.elapsed();
 
-            let ack_delay = ack_delay.as_micros() as u64 /
-                2_u64
+            let ack_delay = ack_delay.as_micros() as u64
+                / 2_u64
                     .pow(self.local_transport_params.ack_delay_exponent as u32);
 
             let frame = frame::Frame::ACK {
@@ -1731,7 +1757,7 @@ impl Connection {
                         // the almost full set.
                         self.streams.mark_almost_full(stream_id, false);
                         continue;
-                    },
+                    }
                 };
 
                 let frame = frame::Frame::MaxStreamData {
@@ -1827,9 +1853,9 @@ impl Connection {
         }
 
         // Create CRYPTO frame.
-        if self.pkt_num_spaces[epoch].crypto_stream.is_flushable() &&
-            left > frame::MAX_CRYPTO_OVERHEAD &&
-            !is_closing
+        if self.pkt_num_spaces[epoch].crypto_stream.is_flushable()
+            && left > frame::MAX_CRYPTO_OVERHEAD
+            && !is_closing
         {
             let crypto_len = left - frame::MAX_CRYPTO_OVERHEAD;
             let crypto_buf = self.pkt_num_spaces[epoch]
@@ -1849,10 +1875,10 @@ impl Connection {
         }
 
         // Create a single STREAM frame for the first stream that is flushable.
-        if pkt_type == packet::Type::Short &&
-            self.max_tx_data > self.tx_data &&
-            left > frame::MAX_STREAM_OVERHEAD &&
-            !is_closing
+        if pkt_type == packet::Type::Short
+            && self.max_tx_data > self.tx_data
+            && left > frame::MAX_STREAM_OVERHEAD
+            && !is_closing
         {
             while let Some(stream_id) = self.streams.pop_flushable() {
                 let stream = match self.streams.get_mut(stream_id) {
@@ -1996,9 +2022,9 @@ impl Connection {
 
         // (Re)start the idle timer if we are sending the first ACK-eliciting
         // packet since last receiving a packet.
-        if ack_eliciting &&
-            !self.ack_eliciting_sent &&
-            self.local_transport_params.idle_timeout > 0
+        if ack_eliciting
+            && !self.ack_eliciting_sent
+            && self.local_transport_params.idle_timeout > 0
         {
             self.idle_timer = Some(now + self.idle_timeout());
         }
@@ -2038,8 +2064,8 @@ impl Connection {
         &mut self, stream_id: u64, out: &mut [u8],
     ) -> Result<(usize, bool)> {
         // We can't read on our own unidirectional streams.
-        if !stream::is_bidi(stream_id) &&
-            stream::is_local(stream_id, self.is_server)
+        if !stream::is_bidi(stream_id)
+            && stream::is_local(stream_id, self.is_server)
         {
             return Err(Error::InvalidStreamState);
         }
@@ -2106,8 +2132,8 @@ impl Connection {
         &mut self, stream_id: u64, buf: &[u8], fin: bool,
     ) -> Result<usize> {
         // We can't write on the peer's unidirectional streams.
-        if !stream::is_bidi(stream_id) &&
-            !stream::is_local(stream_id, self.is_server)
+        if !stream::is_bidi(stream_id)
+            && !stream::is_local(stream_id, self.is_server)
         {
             return Err(Error::InvalidStreamState);
         }
@@ -2171,7 +2197,7 @@ impl Connection {
 
                 // Once shutdown, the stream is guaranteed to be non-readable.
                 self.streams.mark_readable(stream_id, false);
-            },
+            }
 
             // TODO: send RESET_STREAM
             Shutdown::Write => {
@@ -2179,7 +2205,7 @@ impl Connection {
 
                 // Once shutdown, the stream is guaranteed to be non-writable.
                 self.streams.mark_writable(stream_id, false);
-            },
+            }
         }
 
         Ok(())
@@ -2306,7 +2332,7 @@ impl Connection {
         };
 
         if let Some(timeout) = timeout {
-            let now = time::Instant::now();
+            let now = crate::Instant::now();
 
             if timeout <= now {
                 return Some(time::Duration::new(0, 0));
@@ -2322,7 +2348,7 @@ impl Connection {
     ///
     /// If no timeout has occurred it does nothing.
     pub fn on_timeout(&mut self) {
-        let now = time::Instant::now();
+        let now = crate::Instant::now();
 
         if let Some(draining_timer) = self.draining_timer {
             if draining_timer <= now {
@@ -2443,7 +2469,7 @@ impl Connection {
     /// Continues the handshake.
     ///
     /// If the connection is already established, it does nothing.
-    fn do_handshake(&mut self, now: time::Instant) -> Result<()> {
+    fn do_handshake(&mut self, now: crate::Instant) -> Result<()> {
         if !self.handshake_completed {
             match self.handshake.do_handshake() {
                 Ok(_) => {
@@ -2483,7 +2509,7 @@ impl Connection {
 
                     trace!("{} connection established: proto={:?} cipher={:?} curve={:?} sigalg={:?} resumed={} {:?}",
                            &self.trace_id,
-                           std::str::from_utf8(self.application_proto()),
+                           core::str::from_utf8(self.application_proto()),
                            self.handshake.cipher(),
                            self.handshake.curve(),
                            self.handshake.sigalg(),
@@ -2498,7 +2524,7 @@ impl Connection {
                     {
                         self.process_frame(f, packet::EPOCH_APPLICATION, now)?;
                     }
-                },
+                }
 
                 Err(Error::Done) => (),
 
@@ -2554,12 +2580,12 @@ impl Connection {
         }
 
         // If there are flushable streams, use Application.
-        if self.handshake_completed &&
-            (self.should_update_max_data() ||
-                self.streams.should_update_max_streams_bidi() ||
-                self.streams.should_update_max_streams_uni() ||
-                self.streams.has_flushable() ||
-                self.streams.has_almost_full())
+        if self.handshake_completed
+            && (self.should_update_max_data()
+                || self.streams.should_update_max_streams_bidi()
+                || self.streams.should_update_max_streams_uni()
+                || self.streams.has_flushable()
+                || self.streams.has_almost_full())
         {
             return Ok(packet::EPOCH_APPLICATION);
         }
@@ -2583,7 +2609,7 @@ impl Connection {
 
     /// Processes an incoming frame.
     fn process_frame(
-        &mut self, frame: frame::Frame, epoch: packet::Epoch, now: time::Instant,
+        &mut self, frame: frame::Frame, epoch: packet::Epoch, now: crate::Instant,
     ) -> Result<()> {
         trace!("{} rx frm {:?}", self.trace_id, frame);
 
@@ -2617,7 +2643,7 @@ impl Connection {
                     // keys.
                     self.drop_epoch_state(packet::EPOCH_HANDSHAKE);
                 }
-            },
+            }
 
             frame::Frame::ResetStream {
                 stream_id,
@@ -2625,8 +2651,8 @@ impl Connection {
                 ..
             } => {
                 // Peer can't send on our unidirectional streams.
-                if !stream::is_bidi(stream_id) &&
-                    stream::is_local(stream_id, self.is_server)
+                if !stream::is_bidi(stream_id)
+                    && stream::is_local(stream_id, self.is_server)
                 {
                     return Err(Error::InvalidStreamState);
                 }
@@ -2639,16 +2665,16 @@ impl Connection {
                 if self.rx_data > self.max_rx_data {
                     return Err(Error::FlowControl);
                 }
-            },
+            }
 
             frame::Frame::StopSending { stream_id, .. } => {
                 // STOP_SENDING on a receive-only stream is a fatal error.
-                if !stream::is_local(stream_id, self.is_server) &&
-                    !stream::is_bidi(stream_id)
+                if !stream::is_local(stream_id, self.is_server)
+                    && !stream::is_bidi(stream_id)
                 {
                     return Err(Error::InvalidStreamState);
                 }
-            },
+            }
 
             frame::Frame::Crypto { data } => {
                 // Push the data to the stream so it can be re-ordered.
@@ -2668,15 +2694,15 @@ impl Connection {
                 }
 
                 self.do_handshake(now)?;
-            },
+            }
 
             // TODO: implement stateless retry
             frame::Frame::NewToken { .. } => (),
 
             frame::Frame::Stream { stream_id, data } => {
                 // Peer can't send on our unidirectional streams.
-                if !stream::is_bidi(stream_id) &&
-                    stream::is_local(stream_id, self.is_server)
+                if !stream::is_bidi(stream_id)
+                    && stream::is_local(stream_id, self.is_server)
                 {
                     return Err(Error::InvalidStreamState);
                 }
@@ -2698,11 +2724,11 @@ impl Connection {
                 }
 
                 self.rx_data += data_len;
-            },
+            }
 
             frame::Frame::MaxData { max } => {
                 self.max_tx_data = cmp::max(self.max_tx_data, max);
-            },
+            }
 
             frame::Frame::MaxStreamData { stream_id, max } => {
                 // Get existing stream or create a new one.
@@ -2723,7 +2749,7 @@ impl Connection {
                 if writable {
                     self.streams.mark_writable(stream_id, true);
                 }
-            },
+            }
 
             frame::Frame::MaxStreamsBidi { max } => {
                 if max > 2u64.pow(60) {
@@ -2731,7 +2757,7 @@ impl Connection {
                 }
 
                 self.streams.update_peer_max_streams_bidi(max);
-            },
+            }
 
             frame::Frame::MaxStreamsUni { max } => {
                 if max > 2u64.pow(60) {
@@ -2739,7 +2765,7 @@ impl Connection {
                 }
 
                 self.streams.update_peer_max_streams_uni(max);
-            },
+            }
 
             frame::Frame::DataBlocked { .. } => (),
 
@@ -2757,17 +2783,17 @@ impl Connection {
 
             frame::Frame::PathChallenge { data } => {
                 self.challenge = Some(data);
-            },
+            }
 
             frame::Frame::PathResponse { .. } => (),
 
             frame::Frame::ConnectionClose { .. } => {
                 self.draining_timer = Some(now + (self.recovery.pto() * 3));
-            },
+            }
 
             frame::Frame::ApplicationClose { .. } => {
                 self.draining_timer = Some(now + (self.recovery.pto() * 3));
-            },
+            }
         }
 
         Ok(())
@@ -2792,8 +2818,8 @@ impl Connection {
     /// This happens when the new max data limit is at least double the amount
     /// of data that can be received before blocking.
     fn should_update_max_data(&self) -> bool {
-        self.max_rx_data_next != self.max_rx_data &&
-            self.max_rx_data_next / 2 > self.max_rx_data - self.rx_data
+        self.max_rx_data_next != self.max_rx_data
+            && self.max_rx_data_next / 2 > self.max_rx_data - self.rx_data
     }
 
     /// Returns the idle timeout value.
@@ -2828,8 +2854,8 @@ pub struct Stats {
     pub cwnd: usize,
 }
 
-impl std::fmt::Debug for Stats {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for Stats {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
             f,
             "recv={} sent={} lost={} rtt={:?} cwnd={}",
@@ -2900,11 +2926,11 @@ impl TransportParams {
                     }
 
                     tp.original_connection_id = Some(val.to_vec());
-                },
+                }
 
                 0x0001 => {
                     tp.idle_timeout = val.get_varint()?;
-                },
+                }
 
                 0x0002 => {
                     if is_server {
@@ -2912,27 +2938,27 @@ impl TransportParams {
                     }
 
                     tp.stateless_reset_token = Some(val.get_bytes(16)?.to_vec());
-                },
+                }
 
                 0x0003 => {
                     tp.max_packet_size = val.get_varint()?;
-                },
+                }
 
                 0x0004 => {
                     tp.initial_max_data = val.get_varint()?;
-                },
+                }
 
                 0x0005 => {
                     tp.initial_max_stream_data_bidi_local = val.get_varint()?;
-                },
+                }
 
                 0x0006 => {
                     tp.initial_max_stream_data_bidi_remote = val.get_varint()?;
-                },
+                }
 
                 0x0007 => {
                     tp.initial_max_stream_data_uni = val.get_varint()?;
-                },
+                }
 
                 0x0008 => {
                     let max = val.get_varint()?;
@@ -2942,7 +2968,7 @@ impl TransportParams {
                     }
 
                     tp.initial_max_streams_bidi = max;
-                },
+                }
 
                 0x0009 => {
                     let max = val.get_varint()?;
@@ -2952,7 +2978,7 @@ impl TransportParams {
                     }
 
                     tp.initial_max_streams_uni = max;
-                },
+                }
 
                 0x000a => {
                     let ack_delay_exponent = val.get_varint()?;
@@ -2962,7 +2988,7 @@ impl TransportParams {
                     }
 
                     tp.ack_delay_exponent = ack_delay_exponent;
-                },
+                }
 
                 0x000b => {
                     let max_ack_delay = val.get_varint()?;
@@ -2972,11 +2998,11 @@ impl TransportParams {
                     }
 
                     tp.max_ack_delay = max_ack_delay;
-                },
+                }
 
                 0x000c => {
                     tp.disable_active_migration = true;
-                },
+                }
 
                 0x000d => {
                     if is_server {
@@ -2984,11 +3010,11 @@ impl TransportParams {
                     }
 
                     // TODO: decode preferred_address
-                },
+                }
 
                 0x000e => {
                     tp.active_conn_id_limit = val.get_varint()?;
-                },
+                }
 
                 // Ignore unknown parameters.
                 _ => (),
@@ -3117,8 +3143,8 @@ impl TransportParams {
     }
 }
 
-impl std::fmt::Debug for TransportParams {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for TransportParams {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "idle_timeout={} ", self.idle_timeout)?;
         write!(f, "max_packet_size={} ", self.max_packet_size)?;
         write!(f, "initial_max_data={} ", self.initial_max_data)?;
@@ -3160,6 +3186,7 @@ impl std::fmt::Debug for TransportParams {
 }
 
 #[doc(hidden)]
+#[cfg(test)]
 pub mod testing {
     use super::*;
 
@@ -3385,8 +3412,8 @@ pub mod testing {
 
         hdr.to_bytes(&mut b)?;
 
-        let payload_len = frames.iter().fold(0, |acc, x| acc + x.wire_len()) +
-            space.overhead().unwrap();
+        let payload_len = frames.iter().fold(0, |acc, x| acc + x.wire_len())
+            + space.overhead().unwrap();
 
         if pkt_type != packet::Type::Short {
             let len = pn_len + payload_len;

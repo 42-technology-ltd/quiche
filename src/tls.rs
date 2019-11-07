@@ -24,11 +24,12 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::ffi;
-use std::ptr;
-use std::slice;
+use core::ptr;
+use core::slice;
 
-use std::io::prelude::*;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 
 use libc::c_char;
 use libc::c_int;
@@ -141,20 +142,6 @@ impl Context {
         }
     }
 
-    pub fn use_certificate_chain_file(&mut self, file: &str) -> Result<()> {
-        let cstr = ffi::CString::new(file).map_err(|_| Error::TlsFail)?;
-        map_result(unsafe {
-            SSL_CTX_use_certificate_chain_file(self.as_ptr(), cstr.as_ptr())
-        })
-    }
-
-    pub fn use_privkey_file(&mut self, file: &str) -> Result<()> {
-        let cstr = ffi::CString::new(file).map_err(|_| Error::TlsFail)?;
-        map_result(unsafe {
-            SSL_CTX_use_PrivateKey_file(self.as_ptr(), cstr.as_ptr(), 1)
-        })
-    }
-
     #[cfg(not(windows))]
     fn load_ca_certs(&mut self) -> Result<()> {
         unsafe { map_result(SSL_CTX_set_default_verify_paths(self.as_ptr())) }
@@ -263,7 +250,7 @@ impl Context {
     }
 }
 
-unsafe impl std::marker::Send for Context {}
+unsafe impl core::marker::Send for Context {}
 
 impl Drop for Context {
     fn drop(&mut self) {
@@ -344,7 +331,7 @@ impl Handshake {
     }
 
     pub fn set_host_name(&self, name: &str) -> Result<()> {
-        let cstr = ffi::CString::new(name).map_err(|_| Error::TlsFail)?;
+        let cstr = crate::ffi::CString::new(name).map_err(|_| Error::TlsFail)?;
         map_result_ssl(self, unsafe {
             SSL_set_tlsext_host_name(self.as_ptr(), cstr.as_ptr())
         })?;
@@ -418,7 +405,7 @@ impl Handshake {
             }
 
             let curve_name = SSL_get_curve_name(curve_id);
-            match std::ffi::CStr::from_ptr(curve_name).to_str() {
+            match crate::ffi::CStr::from_ptr(curve_name).to_str() {
                 Ok(v) => v,
 
                 Err(_) => return None,
@@ -436,7 +423,7 @@ impl Handshake {
             }
 
             let sigalg_name = SSL_get_signature_algorithm_name(sigalg_id, 1);
-            match std::ffi::CStr::from_ptr(sigalg_name).to_str() {
+            match crate::ffi::CStr::from_ptr(sigalg_name).to_str() {
                 Ok(v) => v,
 
                 Err(_) => return None,
@@ -510,12 +497,15 @@ extern fn set_encryption_secrets(
 
     let space = match level {
         crypto::Level::Initial => &mut conn.pkt_num_spaces[packet::EPOCH_INITIAL],
-        crypto::Level::ZeroRTT =>
-            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION],
-        crypto::Level::Handshake =>
-            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE],
-        crypto::Level::OneRTT =>
-            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION],
+        crypto::Level::ZeroRTT => {
+            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION]
+        }
+        crypto::Level::Handshake => {
+            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE]
+        }
+        crypto::Level::OneRTT => {
+            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION]
+        }
     };
 
     let aead = match get_cipher_from_ptr(ssl) {
@@ -611,10 +601,12 @@ extern fn add_handshake_data(
     let space = match level {
         crypto::Level::Initial => &mut conn.pkt_num_spaces[packet::EPOCH_INITIAL],
         crypto::Level::ZeroRTT => unreachable!(),
-        crypto::Level::Handshake =>
-            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE],
-        crypto::Level::OneRTT =>
-            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION],
+        crypto::Level::Handshake => {
+            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE]
+        }
+        crypto::Level::OneRTT => {
+            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION]
+        }
     };
 
     if space.crypto_stream.send.push_slice(buf, false).is_err() {
@@ -652,21 +644,8 @@ extern fn send_alert(ssl: *mut SSL, level: crypto::Level, alert: u8) -> c_int {
     1
 }
 
-extern fn keylog(_: *mut SSL, line: *const c_char) {
-    if let Some(path) = std::env::var_os("SSLKEYLOGFILE") {
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path);
-
-        if let Ok(mut file) = file {
-            let data = unsafe { ffi::CStr::from_ptr(line).to_bytes() };
-
-            file.write_all(b"QUIC_").unwrap_or(());
-            file.write_all(data).unwrap_or(());
-            file.write_all(b"\n").unwrap_or(());
-        }
-    }
+extern fn keylog(_: *mut SSL, _line: *const c_char) {
+    // Removed
 }
 
 extern fn select_alpn(
@@ -690,8 +669,8 @@ extern fn select_alpn(
 
     while let Ok(proto) = protos.get_bytes_with_u8_length() {
         let found = conn.application_protos.iter().any(|expected| {
-            if expected.len() == proto.len() &&
-                expected.as_slice() == proto.as_ref()
+            if expected.len() == proto.len()
+                && expected.as_slice() == proto.as_ref()
             {
                 unsafe {
                     *out = expected.as_slice().as_ptr();
@@ -745,7 +724,7 @@ fn map_result_ssl(ssl: &Handshake, bssl_result: c_int) -> Result<()> {
                     log_ssl_error();
 
                     Err(Error::TlsFail)
-                },
+                }
 
                 // SSL_ERROR_WANT_READ
                 2 => Err(Error::Done),
@@ -770,7 +749,7 @@ fn map_result_ssl(ssl: &Handshake, bssl_result: c_int) -> Result<()> {
 
                 _ => Err(Error::TlsFail),
             }
-        },
+        }
     }
 }
 
@@ -782,7 +761,7 @@ fn log_ssl_error() {
         ERR_error_string_n(e, err.as_ptr(), err.len());
     }
 
-    trace!("{}", std::str::from_utf8(&err).unwrap());
+    trace!("{}", core::str::from_utf8(&err).unwrap());
 }
 
 extern {
@@ -792,14 +771,6 @@ extern {
     // SSL_CTX
     fn SSL_CTX_new(method: *const SSL_METHOD) -> *mut SSL_CTX;
     fn SSL_CTX_free(ctx: *mut SSL_CTX);
-
-    fn SSL_CTX_use_certificate_chain_file(
-        ctx: *mut SSL_CTX, file: *const c_char,
-    ) -> c_int;
-
-    fn SSL_CTX_use_PrivateKey_file(
-        ctx: *mut SSL_CTX, file: *const c_char, ty: c_int,
-    ) -> c_int;
 
     #[cfg(not(windows))]
     fn SSL_CTX_set_default_verify_paths(ctx: *mut SSL_CTX) -> c_int;

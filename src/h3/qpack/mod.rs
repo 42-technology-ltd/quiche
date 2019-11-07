@@ -37,7 +37,7 @@ const LITERAL_WITH_NAME_REF: u8 = 0b0100_0000;
 /// that can produce an error.
 ///
 /// [`Result`]: https://doc.rust-lang.org/std/result/enum.Result.html
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// A QPACK error.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -58,19 +58,13 @@ pub enum Error {
     HeaderListTooLarge,
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
-
-impl std::convert::From<crate::octets::BufferTooShortError> for Error {
+impl core::convert::From<crate::octets::BufferTooShortError> for Error {
     fn from(_err: crate::octets::BufferTooShortError) -> Self {
         Error::BufferTooShort
     }
@@ -102,7 +96,7 @@ mod tests {
         assert!(enc.encode(&headers, &mut encoded).is_ok());
 
         let mut dec = Decoder::new();
-        assert_eq!(dec.decode(&mut encoded, std::u64::MAX), Ok(headers));
+        assert_eq!(dec.decode(&mut encoded, core::u64::MAX), Ok(headers));
     }
 }
 

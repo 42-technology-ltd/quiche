@@ -24,15 +24,18 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-/// Zero-copy abstraction for parsing and constructing network packets.
-use std::mem;
-use std::ptr;
+//! Zero-copy abstraction for parsing and constructing network packets.
+
+use core::mem;
+use core::ptr;
+
+use alloc::vec::Vec;
 
 /// A specialized [`Result`] type for [`Octets`] operations.
 ///
-/// [`Result`]: https://doc.rust-lang.org/std/result/enum.Result.html
+/// [`Result`]: https://doc.rust-lang.org/core/result/enum.Result.html
 /// [`Octets`]: struct.Octets.html
-pub type Result<T> = std::result::Result<T, BufferTooShortError>;
+pub type Result<T> = core::result::Result<T, BufferTooShortError>;
 
 /// An error indicating that the provided [`Octets`] is not big enough.
 ///
@@ -40,15 +43,9 @@ pub type Result<T> = std::result::Result<T, BufferTooShortError>;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BufferTooShortError;
 
-impl std::fmt::Display for BufferTooShortError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for BufferTooShortError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "BufferTooShortError")
-    }
-}
-
-impl std::error::Error for BufferTooShortError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
     }
 }
 
@@ -251,19 +248,19 @@ impl<'a> Octets<'a> {
                 let buf = self.put_u16(v as u16)?;
                 buf[0] |= 0x40;
                 buf
-            },
+            }
 
             4 => {
                 let buf = self.put_u32(v as u32)?;
                 buf[0] |= 0x80;
                 buf
-            },
+            }
 
             8 => {
                 let buf = self.put_u64(v)?;
                 buf[0] |= 0xc0;
                 buf
-            },
+            }
 
             _ => panic!("value is too large for varint"),
         };
@@ -637,7 +634,7 @@ mod tests {
     fn varint_too_large() {
         let mut d = [0; 3];
         let mut b = Octets::with_slice(&mut d);
-        assert!(b.put_varint(std::u64::MAX).is_err());
+        assert!(b.put_varint(core::u64::MAX).is_err());
     }
 
     #[test]

@@ -24,9 +24,9 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::ptr;
-use std::slice;
-use std::str;
+use core::ptr;
+use core::slice;
+use core::str;
 
 use libc::c_int;
 use libc::c_void;
@@ -93,7 +93,7 @@ pub extern fn quiche_h3_conn_poll(
             }
 
             stream_id as i64
-        },
+        }
 
         Err(e) => e.to_c() as i64,
     }
@@ -125,7 +125,7 @@ pub extern fn quiche_h3_event_for_each_header(
     argp: *mut c_void,
 ) -> c_int {
     match ev {
-        h3::Event::Headers { list, .. } =>
+        h3::Event::Headers { list, .. } => {
             for h in list {
                 let rc = cb(
                     h.name().as_ptr(),
@@ -138,7 +138,8 @@ pub extern fn quiche_h3_event_for_each_header(
                 if rc != 0 {
                     return rc;
                 }
-            },
+            }
+        }
 
         _ => unreachable!(),
     }

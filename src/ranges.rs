@@ -24,11 +24,13 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::ops::Range;
+use core::ops::Range;
 
-use std::collections::btree_map;
-use std::collections::BTreeMap;
-use std::collections::Bound;
+use alloc::collections::btree_map;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
+
+use core::ops::Bound;
 
 #[derive(Clone, Default, PartialEq, PartialOrd)]
 pub struct RangeSet {
@@ -47,8 +49,8 @@ impl RangeSet {
             if range_overlaps(&r, &item) {
                 self.inner.remove(&r.start);
 
-                start = std::cmp::min(start, r.start);
-                end = std::cmp::max(end, r.end);
+                start = core::cmp::min(start, r.start);
+                end = core::cmp::max(end, r.end);
             }
         }
 
@@ -68,8 +70,8 @@ impl RangeSet {
             // New range overlaps with existing range in the set, merge them.
             self.inner.remove(&r.start);
 
-            start = std::cmp::min(start, r.start);
-            end = std::cmp::max(end, r.end);
+            start = core::cmp::min(start, r.start);
+            end = core::cmp::max(end, r.end);
         }
 
         self.inner.insert(start, end);
@@ -152,8 +154,8 @@ impl PartialEq<Range<u64>> for RangeSet {
     }
 }
 
-impl std::fmt::Debug for RangeSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for RangeSet {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let ranges: Vec<Range<u64>> = self
             .iter()
             .map(|mut r| {
@@ -232,8 +234,8 @@ impl<'a> DoubleEndedIterator for Flatten<'a> {
 }
 
 fn range_overlaps(r: &Range<u64>, other: &Range<u64>) -> bool {
-    other.start >= r.start && other.start <= r.end ||
-        other.end >= r.start && other.end <= r.end
+    other.start >= r.start && other.start <= r.end
+        || other.end >= r.start && other.end <= r.end
 }
 
 #[cfg(test)]
@@ -298,27 +300,31 @@ mod tests {
 
         r.insert(10..15);
         assert_eq!(r.inner.len(), 2);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            3, 4, 5, 6, 9, 10, 11, 12, 13, 14
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[3, 4, 5, 6, 9, 10, 11, 12, 13, 14]
+        );
 
         r.insert(2..5);
         assert_eq!(r.inner.len(), 2);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14]
+        );
 
         r.insert(8..10);
         assert_eq!(r.inner.len(), 2);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14]
+        );
 
         r.insert(6..10);
         assert_eq!(r.inner.len(), 1);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+        );
     }
 
     #[test]
@@ -327,27 +333,31 @@ mod tests {
 
         r.insert(3..6);
         r.insert(16..20);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            3, 4, 5, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[3, 4, 5, 16, 17, 18, 19]
+        );
 
         r.insert(10..11);
         assert_eq!(r.inner.len(), 3);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            3, 4, 5, 10, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[3, 4, 5, 10, 16, 17, 18, 19]
+        );
 
         r.insert(13..14);
         assert_eq!(r.inner.len(), 4);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            3, 4, 5, 10, 13, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[3, 4, 5, 10, 13, 16, 17, 18, 19]
+        );
 
         r.insert(4..17);
         assert_eq!(r.inner.len(), 1);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        );
     }
 
     #[test]
@@ -389,43 +399,49 @@ mod tests {
 
         r.push_item(15);
         assert_eq!(r.inner.len(), 3);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            4, 5, 6, 9, 10, 11, 15
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[4, 5, 6, 9, 10, 11, 15]
+        );
 
         r.push_item(15);
         assert_eq!(r.inner.len(), 3);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            4, 5, 6, 9, 10, 11, 15
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[4, 5, 6, 9, 10, 11, 15]
+        );
 
         r.push_item(1);
         assert_eq!(r.inner.len(), 4);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            1, 4, 5, 6, 9, 10, 11, 15
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[1, 4, 5, 6, 9, 10, 11, 15]
+        );
 
         r.push_item(12);
         r.push_item(13);
         r.push_item(14);
         assert_eq!(r.inner.len(), 3);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            1, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[1, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15]
+        );
 
         r.push_item(2);
         r.push_item(3);
         assert_eq!(r.inner.len(), 2);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15]
+        );
 
         r.push_item(8);
         r.push_item(7);
         assert_eq!(r.inner.len(), 1);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        );
     }
 
     #[test]
@@ -442,9 +458,10 @@ mod tests {
         r.insert(9..12);
         assert_eq!(r.inner.len(), 2);
         assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[4, 5, 6, 9, 10, 11]);
-        assert_eq!(&r.flatten().rev().collect::<Vec<u64>>(), &[
-            11, 10, 9, 6, 5, 4
-        ]);
+        assert_eq!(
+            &r.flatten().rev().collect::<Vec<u64>>(),
+            &[11, 10, 9, 6, 5, 4]
+        );
     }
 
     #[test]
@@ -467,24 +484,28 @@ mod tests {
         r.insert(9..11);
         r.insert(13..14);
         r.insert(16..20);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            3, 4, 5, 9, 10, 13, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[3, 4, 5, 9, 10, 13, 16, 17, 18, 19]
+        );
 
         r.remove_until(2);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            3, 4, 5, 9, 10, 13, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[3, 4, 5, 9, 10, 13, 16, 17, 18, 19]
+        );
 
         r.remove_until(4);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            5, 9, 10, 13, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[5, 9, 10, 13, 16, 17, 18, 19]
+        );
 
         r.remove_until(6);
-        assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[
-            9, 10, 13, 16, 17, 18, 19
-        ]);
+        assert_eq!(
+            &r.flatten().collect::<Vec<u64>>(),
+            &[9, 10, 13, 16, 17, 18, 19]
+        );
 
         r.remove_until(10);
         assert_eq!(&r.flatten().collect::<Vec<u64>>(), &[13, 16, 17, 18, 19]);

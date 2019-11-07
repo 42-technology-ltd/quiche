@@ -24,14 +24,14 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::cmp;
+use core::cmp;
+use core::time::Duration;
 
-use std::time::Duration;
-use std::time::Instant;
-
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 use crate::Error;
+use crate::Instant;
 use crate::Result;
 
 use crate::frame;
@@ -125,7 +125,7 @@ impl Default for Recovery {
 
             time_of_last_sent_ack_eliciting_pkt: now,
 
-            largest_acked_pkt: [std::u64::MAX; packet::EPOCH_COUNT],
+            largest_acked_pkt: [core::u64::MAX; packet::EPOCH_COUNT],
 
             largest_sent_pkt: [0; packet::EPOCH_COUNT],
 
@@ -155,7 +155,7 @@ impl Default for Recovery {
 
             recovery_start_time: None,
 
-            ssthresh: std::usize::MAX,
+            ssthresh: core::usize::MAX,
 
             probes: 0,
         }
@@ -206,7 +206,7 @@ impl Recovery {
             return Err(Error::InvalidPacket);
         }
 
-        if self.largest_acked_pkt[epoch] == std::u64::MAX {
+        if self.largest_acked_pkt[epoch] == core::u64::MAX {
             self.largest_acked_pkt[epoch] = largest_acked;
         } else {
             self.largest_acked_pkt[epoch] =
@@ -298,7 +298,7 @@ impl Recovery {
     pub fn cwnd(&self) -> usize {
         // Ignore cwnd when sending probe packets.
         if self.probes > 0 {
-            return std::usize::MAX;
+            return core::usize::MAX;
         }
 
         if self.bytes_in_flight > self.cwnd {
@@ -327,7 +327,7 @@ impl Recovery {
                 self.smoothed_rtt = Some(latest_rtt);
 
                 self.rttvar = latest_rtt / 2;
-            },
+            }
 
             Some(srtt) => {
                 self.min_rtt = cmp::min(self.min_rtt, latest_rtt);
@@ -341,13 +341,13 @@ impl Recovery {
                     latest_rtt
                 };
 
-                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0) +
-                    sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
+                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0)
+                    + sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
 
                 self.smoothed_rtt = Some(
                     srtt.mul_f64(7.0 / 8.0) + adjusted_rtt.mul_f64(1.0 / 8.0),
                 );
-            },
+            }
         }
     }
 
@@ -413,8 +413,8 @@ impl Recovery {
 
         for (_, unacked) in self.sent[epoch].range(..=largest_acked) {
             // Mark packet as lost, or set time when it should be marked.
-            if unacked.time <= lost_send_time ||
-                largest_acked >= unacked.pkt_num + PACKET_THRESHOLD
+            if unacked.time <= lost_send_time
+                || largest_acked >= unacked.pkt_num + PACKET_THRESHOLD
             {
                 if unacked.in_flight {
                     trace!(
@@ -432,8 +432,9 @@ impl Recovery {
                 let loss_time = match self.loss_time[epoch] {
                     None => unacked.time + loss_delay,
 
-                    Some(loss_time) =>
-                        cmp::min(loss_time, unacked.time + loss_delay),
+                    Some(loss_time) => {
+                        cmp::min(loss_time, unacked.time + loss_delay)
+                    }
                 };
 
                 self.loss_time[epoch] = Some(loss_time);
@@ -531,8 +532,8 @@ impl Recovery {
     }
 }
 
-impl std::fmt::Debug for Recovery {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for Recovery {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self.loss_detection_timer {
             Some(v) => {
                 let now = Instant::now();
@@ -543,11 +544,11 @@ impl std::fmt::Debug for Recovery {
                 } else {
                     write!(f, "timer=exp ")?;
                 }
-            },
+            }
 
             None => {
                 write!(f, "timer=none ")?;
-            },
+            }
         };
 
         write!(f, "inflight={} ", self.bytes_in_flight)?;

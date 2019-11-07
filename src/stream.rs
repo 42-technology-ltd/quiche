@@ -24,13 +24,14 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::cmp;
+use core::cmp;
 
-use std::collections::hash_map;
-use std::collections::BinaryHeap;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::VecDeque;
+use alloc::collections::btree_map;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
+use alloc::collections::BinaryHeap;
+use alloc::collections::VecDeque;
+use alloc::vec::Vec;
 
 use crate::Error;
 use crate::Result;
@@ -43,7 +44,7 @@ const MAX_WRITE_SIZE: usize = 1000;
 #[derive(Default)]
 pub struct StreamMap {
     /// Map of streams indexed by stream ID.
-    streams: HashMap<u64, Stream>,
+    streams: BTreeMap<u64, Stream>,
 
     /// Peer's maximum bidirectional stream count limit.
     peer_max_streams_bidi: u64,
@@ -81,19 +82,19 @@ pub struct StreamMap {
     /// Set of stream IDs corresponding to streams that have outstanding data
     /// to read. This is used to generate a `StreamIter` of streams without
     /// having to iterate over the full list of streams.
-    readable: HashSet<u64>,
+    readable: BTreeSet<u64>,
 
     /// Set of stream IDs corresponding to streams that have enough flow control
     /// capacity to be written to, and is not finished. This is used to generate
     /// a `StreamIter` of streams without having to iterate over the full list
     /// of streams.
-    writable: HashSet<u64>,
+    writable: BTreeSet<u64>,
 
     /// Set of stream IDs corresponding to streams that are almost out of flow
     /// control credit and need to send MAX_STREAM_DATA. This is used to
     /// generate a `StreamIter` of streams without having to iterate over the
     /// full list of streams.
-    almost_full: HashSet<u64>,
+    almost_full: BTreeSet<u64>,
 }
 
 impl StreamMap {
@@ -136,7 +137,7 @@ impl StreamMap {
         peer_params: &crate::TransportParams, local: bool, is_server: bool,
     ) -> Result<&mut Stream> {
         let stream = match self.streams.entry(id) {
-            hash_map::Entry::Vacant(v) => {
+            btree_map::Entry::Vacant(v) => {
                 if local != is_local(id, is_server) {
                     return Err(Error::InvalidStreamState);
                 }
@@ -158,58 +159,59 @@ impl StreamMap {
                     ),
 
                     // Remotely-initiated unidirectional stream.
-                    (false, false) =>
-                        (local_params.initial_max_stream_data_uni, 0),
+                    (false, false) => {
+                        (local_params.initial_max_stream_data_uni, 0)
+                    }
                 };
 
                 // Enforce stream count limits.
                 match (is_local(id, is_server), is_bidi(id)) {
                     (true, true) => {
-                        if self.local_opened_streams_bidi >=
-                            self.peer_max_streams_bidi
+                        if self.local_opened_streams_bidi
+                            >= self.peer_max_streams_bidi
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.local_opened_streams_bidi += 1;
-                    },
+                    }
 
                     (true, false) => {
-                        if self.local_opened_streams_uni >=
-                            self.peer_max_streams_uni
+                        if self.local_opened_streams_uni
+                            >= self.peer_max_streams_uni
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.local_opened_streams_uni += 1;
-                    },
+                    }
 
                     (false, true) => {
-                        if self.peer_opened_streams_bidi >=
-                            self.local_max_streams_bidi
+                        if self.peer_opened_streams_bidi
+                            >= self.local_max_streams_bidi
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.peer_opened_streams_bidi += 1;
-                    },
+                    }
 
                     (false, false) => {
-                        if self.peer_opened_streams_uni >=
-                            self.local_max_streams_uni
+                        if self.peer_opened_streams_uni
+                            >= self.local_max_streams_uni
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.peer_opened_streams_uni += 1;
-                    },
+                    }
                 };
 
                 let s = Stream::new(max_rx_data, max_tx_data, is_bidi(id), local);
                 v.insert(s)
-            },
+            }
 
-            hash_map::Entry::Occupied(v) => v.into_mut(),
+            btree_map::Entry::Occupied(v) => v.into_mut(),
         };
 
         // Stream might already be writable due to initial flow control limits.
@@ -346,22 +348,22 @@ impl StreamMap {
     /// Returns true if the max bidirectional streams count needs to be updated
     /// by sending a MAX_STREAMS frame to the peer.
     pub fn should_update_max_streams_bidi(&self) -> bool {
-        self.local_max_streams_bidi_next != self.local_max_streams_bidi &&
-            self.local_max_streams_bidi_next / 2 >
-                self.local_max_streams_bidi - self.peer_opened_streams_bidi
+        self.local_max_streams_bidi_next != self.local_max_streams_bidi
+            && self.local_max_streams_bidi_next / 2
+                > self.local_max_streams_bidi - self.peer_opened_streams_bidi
     }
 
     /// Returns true if the max unidirectional streams count needs to be updated
     /// by sending a MAX_STREAMS frame to the peer.
     pub fn should_update_max_streams_uni(&self) -> bool {
-        self.local_max_streams_uni_next != self.local_max_streams_uni &&
-            self.local_max_streams_uni_next / 2 >
-                self.local_max_streams_uni - self.peer_opened_streams_uni
+        self.local_max_streams_uni_next != self.local_max_streams_uni
+            && self.local_max_streams_uni_next / 2
+                > self.local_max_streams_uni - self.peer_opened_streams_uni
     }
 
     /// Creates an iterator over all streams.
     #[cfg(test)]
-    pub fn iter_mut(&mut self) -> hash_map::IterMut<u64, Stream> {
+    pub fn iter_mut(&mut self) -> btree_map::IterMut<u64, Stream> {
         self.streams.iter_mut()
     }
 }
@@ -403,9 +405,9 @@ impl Stream {
     /// Returns true if the stream has enough flow control capacity to be
     /// written to, and is not finished.
     pub fn is_writable(&self) -> bool {
-        !self.send.shutdown &&
-            !self.send.is_fin() &&
-            self.send.off < self.send.max_data
+        !self.send.shutdown
+            && !self.send.is_fin()
+            && self.send.off < self.send.max_data
     }
 
     /// Returns true if the stream has data to send and is allowed to send at
@@ -457,7 +459,7 @@ pub struct StreamIter {
 }
 
 impl StreamIter {
-    fn from(streams: &HashSet<u64>) -> Self {
+    fn from(streams: &BTreeSet<u64>) -> Self {
         StreamIter {
             streams: streams.iter().copied().collect(),
         }
@@ -716,9 +718,9 @@ impl RecvBuf {
     pub fn almost_full(&self) -> bool {
         // Send MAX_STREAM_DATA when the new limit is at least double the
         // amount of data that can be received before blocking.
-        self.fin_off.is_none() &&
-            self.max_data_next != self.max_data &&
-            self.max_data_next / 2 > self.max_data - self.len
+        self.fin_off.is_none()
+            && self.max_data_next != self.max_data
+            && self.max_data_next / 2 > self.max_data - self.len
     }
 
     /// Returns true if the receive-side of the stream is complete.
@@ -887,10 +889,10 @@ impl SendBuf {
         let mut out_len = max_data;
         let mut out_off = self.data.peek().map_or_else(|| out.off, RangeBuf::off);
 
-        while out_len > 0 &&
-            self.ready() &&
-            self.off() == out_off &&
-            self.off() < self.max_data
+        while out_len > 0
+            && self.ready()
+            && self.off() == out_off
+            && self.off() < self.max_data
         {
             let mut buf = match self.data.pop() {
                 Some(v) => v,
@@ -997,7 +999,7 @@ impl SendBuf {
         match self.acked.iter().next() {
             // Only consider the initial range if it contiguously covers the
             // start of the stream (i.e. from offset 0).
-            Some(std::ops::Range { start: 0, end }) => end,
+            Some(core::ops::Range { start: 0, end }) => end,
 
             Some(_) | None => 0,
         }
@@ -1066,7 +1068,7 @@ impl RangeBuf {
     }
 }
 
-impl std::ops::Deref for RangeBuf {
+impl core::ops::Deref for RangeBuf {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
@@ -1074,7 +1076,7 @@ impl std::ops::Deref for RangeBuf {
     }
 }
 
-impl std::ops::DerefMut for RangeBuf {
+impl core::ops::DerefMut for RangeBuf {
     fn deref_mut(&mut self) -> &mut [u8] {
         &mut self.data
     }
@@ -1105,7 +1107,7 @@ mod tests {
 
     #[test]
     fn empty_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1171,7 +1173,7 @@ mod tests {
 
     #[test]
     fn ordered_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1208,7 +1210,7 @@ mod tests {
 
     #[test]
     fn split_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1248,7 +1250,7 @@ mod tests {
 
     #[test]
     fn incomplete_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1276,7 +1278,7 @@ mod tests {
 
     #[test]
     fn zero_len_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1304,7 +1306,7 @@ mod tests {
 
     #[test]
     fn past_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1343,7 +1345,7 @@ mod tests {
 
     #[test]
     fn fully_overlapping_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1374,7 +1376,7 @@ mod tests {
 
     #[test]
     fn fully_overlapping_read2() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1405,7 +1407,7 @@ mod tests {
 
     #[test]
     fn fully_overlapping_read3() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1436,7 +1438,7 @@ mod tests {
 
     #[test]
     fn fully_overlapping_read_multi() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1473,7 +1475,7 @@ mod tests {
 
     #[test]
     fn overlapping_start_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1503,7 +1505,7 @@ mod tests {
 
     #[test]
     fn overlapping_end_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1533,7 +1535,7 @@ mod tests {
 
     #[test]
     fn partially_multi_overlapping_reordered_read() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1570,7 +1572,7 @@ mod tests {
 
     #[test]
     fn partially_multi_overlapping_reordered_read2() {
-        let mut recv = RecvBuf::new(std::u64::MAX);
+        let mut recv = RecvBuf::new(core::u64::MAX);
         assert_eq!(recv.len, 0);
 
         let mut buf = [0; 32];
@@ -1625,17 +1627,17 @@ mod tests {
 
     #[test]
     fn empty_write() {
-        let mut send = SendBuf::new(std::u64::MAX);
+        let mut send = SendBuf::new(core::u64::MAX);
         assert_eq!(send.len, 0);
 
-        let write = send.pop(std::usize::MAX).unwrap();
+        let write = send.pop(core::usize::MAX).unwrap();
         assert_eq!(write.len(), 0);
         assert_eq!(write.fin(), false);
     }
 
     #[test]
     fn multi_write() {
-        let mut send = SendBuf::new(std::u64::MAX);
+        let mut send = SendBuf::new(core::u64::MAX);
         assert_eq!(send.len, 0);
 
         let first = b"something";
@@ -1656,7 +1658,7 @@ mod tests {
 
     #[test]
     fn split_write() {
-        let mut send = SendBuf::new(std::u64::MAX);
+        let mut send = SendBuf::new(core::u64::MAX);
         assert_eq!(send.len, 0);
 
         let first = b"something";
@@ -1692,7 +1694,7 @@ mod tests {
 
     #[test]
     fn resend() {
-        let mut send = SendBuf::new(std::u64::MAX);
+        let mut send = SendBuf::new(core::u64::MAX);
         assert_eq!(send.len, 0);
         assert_eq!(send.off(), 0);
 
@@ -1820,7 +1822,7 @@ mod tests {
 
     #[test]
     fn zero_len_write() {
-        let mut send = SendBuf::new(std::u64::MAX);
+        let mut send = SendBuf::new(core::u64::MAX);
         assert_eq!(send.len, 0);
 
         let first = b"something";

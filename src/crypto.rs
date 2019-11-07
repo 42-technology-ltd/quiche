@@ -27,6 +27,8 @@
 use ring::aead;
 use ring::hkdf;
 
+use alloc::vec::Vec;
+
 use crate::Error;
 use crate::Result;
 
@@ -35,10 +37,10 @@ use crate::packet;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Level {
-    Initial   = 0,
-    ZeroRTT   = 1,
+    Initial = 0,
+    ZeroRTT = 1,
     Handshake = 2,
-    OneRTT    = 3,
+    OneRTT = 3,
 }
 
 impl Level {

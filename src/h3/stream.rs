@@ -24,6 +24,8 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use alloc::vec::Vec;
+
 use super::Error;
 use super::Result;
 
@@ -189,7 +191,7 @@ impl Stream {
                 self.initialized = true;
 
                 State::QpackInstruction
-            },
+            }
 
             Type::Unknown => State::Drain,
         };
@@ -222,55 +224,66 @@ impl Stream {
                 // initialized, no more SETTINGS are permitted.
                 match (ty, self.initialized) {
                     // Initialize control stream.
-                    (frame::SETTINGS_FRAME_TYPE_ID, false) =>
-                        self.initialized = true,
+                    (frame::SETTINGS_FRAME_TYPE_ID, false) => {
+                        self.initialized = true
+                    }
 
                     // Non-SETTINGS frames not allowed on control stream
                     // before initialization.
                     (_, false) => return Err(Error::MissingSettings),
 
                     // Additional SETTINGS frame.
-                    (frame::SETTINGS_FRAME_TYPE_ID, true) =>
-                        return Err(Error::FrameUnexpected),
+                    (frame::SETTINGS_FRAME_TYPE_ID, true) => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
                     // Frames that can't be received on control stream
                     // after initialization.
-                    (frame::DATA_FRAME_TYPE_ID, true) =>
-                        return Err(Error::FrameUnexpected),
+                    (frame::DATA_FRAME_TYPE_ID, true) => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    (frame::HEADERS_FRAME_TYPE_ID, true) =>
-                        return Err(Error::FrameUnexpected),
+                    (frame::HEADERS_FRAME_TYPE_ID, true) => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    (frame::PUSH_PROMISE_FRAME_TYPE_ID, true) =>
-                        return Err(Error::FrameUnexpected),
+                    (frame::PUSH_PROMISE_FRAME_TYPE_ID, true) => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    (frame::DUPLICATE_PUSH_FRAME_TYPE_ID, true) =>
-                        return Err(Error::FrameUnexpected),
+                    (frame::DUPLICATE_PUSH_FRAME_TYPE_ID, true) => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
                     // All other frames are ignored after initialization.
                     (_, true) => (),
                 }
-            },
+            }
 
             Some(Type::Request) => {
                 // Request stream starts uninitialized and only HEADERS
                 // is accepted. Other frames cause an error.
                 if !self.is_local {
                     match (ty, self.initialized) {
-                        (frame::HEADERS_FRAME_TYPE_ID, false) =>
-                            self.initialized = true,
+                        (frame::HEADERS_FRAME_TYPE_ID, false) => {
+                            self.initialized = true
+                        }
 
-                        (frame::CANCEL_PUSH_FRAME_TYPE_ID, _) =>
-                            return Err(Error::FrameUnexpected),
+                        (frame::CANCEL_PUSH_FRAME_TYPE_ID, _) => {
+                            return Err(Error::FrameUnexpected)
+                        }
 
-                        (frame::SETTINGS_FRAME_TYPE_ID, _) =>
-                            return Err(Error::FrameUnexpected),
+                        (frame::SETTINGS_FRAME_TYPE_ID, _) => {
+                            return Err(Error::FrameUnexpected)
+                        }
 
-                        (frame::GOAWAY_FRAME_TYPE_ID, _) =>
-                            return Err(Error::FrameUnexpected),
+                        (frame::GOAWAY_FRAME_TYPE_ID, _) => {
+                            return Err(Error::FrameUnexpected)
+                        }
 
-                        (frame::MAX_PUSH_FRAME_TYPE_ID, _) =>
-                            return Err(Error::FrameUnexpected),
+                        (frame::MAX_PUSH_FRAME_TYPE_ID, _) => {
+                            return Err(Error::FrameUnexpected)
+                        }
 
                         // All other frames can be ignored regardless of stream
                         // state.
@@ -279,32 +292,38 @@ impl Stream {
                         (_, true) => (),
                     }
                 }
-            },
+            }
 
             Some(Type::Push) => {
                 match ty {
                     // Frames that can never be received on request streams.
-                    frame::CANCEL_PUSH_FRAME_TYPE_ID =>
-                        return Err(Error::FrameUnexpected),
+                    frame::CANCEL_PUSH_FRAME_TYPE_ID => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    frame::SETTINGS_FRAME_TYPE_ID =>
-                        return Err(Error::FrameUnexpected),
+                    frame::SETTINGS_FRAME_TYPE_ID => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    frame::PUSH_PROMISE_FRAME_TYPE_ID =>
-                        return Err(Error::FrameUnexpected),
+                    frame::PUSH_PROMISE_FRAME_TYPE_ID => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    frame::GOAWAY_FRAME_TYPE_ID =>
-                        return Err(Error::FrameUnexpected),
+                    frame::GOAWAY_FRAME_TYPE_ID => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    frame::MAX_PUSH_FRAME_TYPE_ID =>
-                        return Err(Error::FrameUnexpected),
+                    frame::MAX_PUSH_FRAME_TYPE_ID => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
-                    frame::DUPLICATE_PUSH_FRAME_TYPE_ID =>
-                        return Err(Error::FrameUnexpected),
+                    frame::DUPLICATE_PUSH_FRAME_TYPE_ID => {
+                        return Err(Error::FrameUnexpected)
+                    }
 
                     _ => (),
                 }
-            },
+            }
 
             _ => return Err(Error::FrameUnexpected),
         }
@@ -321,9 +340,9 @@ impl Stream {
         assert_eq!(self.state, State::FramePayloadLen);
 
         // Only expect frames on Control, Request and Push streams.
-        if self.ty == Some(Type::Control) ||
-            self.ty == Some(Type::Request) ||
-            self.ty == Some(Type::Push)
+        if self.ty == Some(Type::Control)
+            || self.ty == Some(Type::Request)
+            || self.ty == Some(Type::Push)
         {
             let (state, resize) = match self.frame_type {
                 Some(frame::DATA_FRAME_TYPE_ID) => (State::Data, false),
@@ -425,7 +444,7 @@ impl Stream {
     pub fn try_consume_data(
         &mut self, conn: &mut crate::Connection, out: &mut [u8],
     ) -> Result<usize> {
-        let left = std::cmp::min(out.len(), self.state_len - self.state_off);
+        let left = core::cmp::min(out.len(), self.state_len - self.state_off);
 
         let (len, _) = conn.stream_recv(self.id, &mut out[..left])?;
 
@@ -446,7 +465,7 @@ impl Stream {
     fn try_consume_data_for_tests(
         &mut self, stream: &mut std::io::Cursor<Vec<u8>>, out: &mut [u8],
     ) -> Result<usize> {
-        let left = std::cmp::min(out.len(), self.state_len - self.state_off);
+        let left = core::cmp::min(out.len(), self.state_len - self.state_off);
 
         let len = std::io::Read::read(stream, &mut out[..left]).unwrap();
 

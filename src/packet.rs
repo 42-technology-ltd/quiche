@@ -24,7 +24,7 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::time;
+use alloc::vec::Vec;
 
 use crate::Error;
 use crate::Result;
@@ -231,7 +231,7 @@ impl Header {
         match ty {
             Type::Initial => {
                 token = Some(b.get_bytes_with_varint_length()?.to_vec());
-            },
+            }
 
             Type::Retry => {
                 let odcid_len = b.get_u8()?;
@@ -242,7 +242,7 @@ impl Header {
 
                 odcid = Some(b.get_bytes(odcid_len as usize)?.to_vec());
                 token = Some(b.to_vec());
-            },
+            }
 
             Type::VersionNegotiation => {
                 let mut list: Vec<u32> = Vec::new();
@@ -253,7 +253,7 @@ impl Header {
                 }
 
                 versions = Some(list);
-            },
+            }
 
             _ => (),
         };
@@ -332,12 +332,12 @@ impl Header {
                 Some(ref v) => {
                     out.put_varint(v.len() as u64)?;
                     out.put_bytes(v)?;
-                },
+                }
 
                 // No token, so length = 0.
                 None => {
                     out.put_varint(0)?;
-                },
+                }
             }
         }
 
@@ -357,8 +357,8 @@ impl Header {
     }
 }
 
-impl std::fmt::Debug for Header {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for Header {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self.ty)?;
 
         if self.ty != Type::Short {
@@ -404,11 +404,11 @@ impl std::fmt::Debug for Header {
 }
 
 pub fn pkt_num_len(pn: u64) -> Result<usize> {
-    let len = if pn < u64::from(std::u8::MAX) {
+    let len = if pn < u64::from(core::u8::MAX) {
         1
-    } else if pn < u64::from(std::u16::MAX) {
+    } else if pn < u64::from(core::u16::MAX) {
         2
-    } else if pn < u64::from(std::u32::MAX) {
+    } else if pn < u64::from(core::u32::MAX) {
         4
     } else {
         return Err(Error::InvalidPacket);
@@ -617,7 +617,7 @@ pub fn retry(
 pub struct PktNumSpace {
     pub largest_rx_pkt_num: u64,
 
-    pub largest_rx_pkt_time: time::Instant,
+    pub largest_rx_pkt_time: crate::Instant,
 
     pub next_pkt_num: u64,
 
@@ -641,7 +641,7 @@ impl PktNumSpace {
         PktNumSpace {
             largest_rx_pkt_num: 0,
 
-            largest_rx_pkt_time: time::Instant::now(),
+            largest_rx_pkt_time: crate::Instant::now(),
 
             next_pkt_num: 0,
 
@@ -658,8 +658,8 @@ impl PktNumSpace {
             crypto_0rtt_seal: None,
 
             crypto_stream: stream::Stream::new(
-                std::u64::MAX,
-                std::u64::MAX,
+                core::u64::MAX,
+                core::u64::MAX,
                 true,
                 true,
             ),
@@ -668,7 +668,7 @@ impl PktNumSpace {
 
     pub fn clear(&mut self) {
         self.crypto_stream =
-            stream::Stream::new(std::u64::MAX, std::u64::MAX, true, true);
+            stream::Stream::new(core::u64::MAX, core::u64::MAX, true, true);
 
         self.ack_elicited = false;
     }
@@ -724,8 +724,8 @@ impl PktNumWindow {
 
     fn upper(&self) -> u64 {
         self.lower
-            .saturating_add(std::mem::size_of::<u128>() as u64 * 8) -
-            1
+            .saturating_add(core::mem::size_of::<u128>() as u64 * 8)
+            - 1
     }
 }
 
@@ -999,7 +999,7 @@ mod tests {
         assert!(!win.contains(1025));
         assert!(!win.contains(1026));
 
-        win.insert(std::u64::MAX - 1);
+        win.insert(core::u64::MAX - 1);
         assert!(win.contains(0));
         assert!(win.contains(1));
         assert!(win.contains(2));
@@ -1021,8 +1021,8 @@ mod tests {
         assert!(win.contains(1024));
         assert!(win.contains(1025));
         assert!(win.contains(1026));
-        assert!(!win.contains(std::u64::MAX - 2));
-        assert!(win.contains(std::u64::MAX - 1));
+        assert!(!win.contains(core::u64::MAX - 2));
+        assert!(win.contains(core::u64::MAX - 1));
     }
 
     fn test_decrypt_pkt(

@@ -24,6 +24,8 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use alloc::vec::Vec;
+
 use super::Result;
 
 use crate::octets;
@@ -102,11 +104,13 @@ impl Frame {
                 push_id: b.get_varint()?,
             },
 
-            SETTINGS_FRAME_TYPE_ID =>
-                parse_settings_frame(&mut b, payload_length as usize)?,
+            SETTINGS_FRAME_TYPE_ID => {
+                parse_settings_frame(&mut b, payload_length as usize)?
+            }
 
-            PUSH_PROMISE_FRAME_TYPE_ID =>
-                parse_push_promise(payload_length, &mut b)?,
+            PUSH_PROMISE_FRAME_TYPE_ID => {
+                parse_push_promise(payload_length, &mut b)?
+            }
 
             GOAWAY_FRAME_TYPE_ID => Frame::GoAway {
                 stream_id: b.get_varint()?,
@@ -135,21 +139,21 @@ impl Frame {
                 b.put_varint(payload.len() as u64)?;
 
                 b.put_bytes(payload.as_ref())?;
-            },
+            }
 
             Frame::Headers { header_block } => {
                 b.put_varint(HEADERS_FRAME_TYPE_ID)?;
                 b.put_varint(header_block.len() as u64)?;
 
                 b.put_bytes(header_block.as_ref())?;
-            },
+            }
 
             Frame::CancelPush { push_id } => {
                 b.put_varint(CANCEL_PUSH_FRAME_TYPE_ID)?;
                 b.put_varint(octets::varint_len(*push_id) as u64)?;
 
                 b.put_varint(*push_id)?;
-            },
+            }
 
             Frame::Settings {
                 max_header_list_size,
@@ -201,7 +205,7 @@ impl Frame {
                     b.put_varint(val.0)?;
                     b.put_varint(val.1)?;
                 }
-            },
+            }
 
             Frame::PushPromise {
                 push_id,
@@ -213,28 +217,28 @@ impl Frame {
 
                 b.put_varint(*push_id)?;
                 b.put_bytes(header_block.as_ref())?;
-            },
+            }
 
             Frame::GoAway { stream_id } => {
                 b.put_varint(GOAWAY_FRAME_TYPE_ID)?;
                 b.put_varint(octets::varint_len(*stream_id) as u64)?;
 
                 b.put_varint(*stream_id)?;
-            },
+            }
 
             Frame::MaxPushId { push_id } => {
                 b.put_varint(MAX_PUSH_FRAME_TYPE_ID)?;
                 b.put_varint(octets::varint_len(*push_id) as u64)?;
 
                 b.put_varint(*push_id)?;
-            },
+            }
 
             Frame::DuplicatePush { push_id } => {
                 b.put_varint(DUPLICATE_PUSH_FRAME_TYPE_ID)?;
                 b.put_varint(octets::varint_len(*push_id) as u64)?;
 
                 b.put_varint(*push_id)?;
-            },
+            }
 
             Frame::Unknown => unreachable!(),
         }
@@ -243,20 +247,20 @@ impl Frame {
     }
 }
 
-impl std::fmt::Debug for Frame {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for Frame {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Frame::Data { payload } => {
                 write!(f, "DATA len={}", payload.len())?;
-            },
+            }
 
             Frame::Headers { header_block } => {
                 write!(f, "HEADERS len={}", header_block.len())?;
-            },
+            }
 
             Frame::CancelPush { push_id } => {
                 write!(f, "CANCEL_PUSH push_id={}", push_id)?;
-            },
+            }
 
             Frame::Settings {
                 max_header_list_size,
@@ -265,7 +269,7 @@ impl std::fmt::Debug for Frame {
                 ..
             } => {
                 write!(f, "SETTINGS max_headers={:?}, qpack_max_table={:?}, qpack_blocked={:?} ", max_header_list_size, qpack_max_table_capacity, qpack_blocked_streams)?;
-            },
+            }
 
             Frame::PushPromise {
                 push_id,
@@ -277,23 +281,23 @@ impl std::fmt::Debug for Frame {
                     push_id,
                     header_block.len()
                 )?;
-            },
+            }
 
             Frame::GoAway { stream_id } => {
                 write!(f, "GOAWAY stream_id={}", stream_id)?;
-            },
+            }
 
             Frame::MaxPushId { push_id } => {
                 write!(f, "MAX_PUSH_ID push_id={}", push_id)?;
-            },
+            }
 
             Frame::DuplicatePush { push_id } => {
                 write!(f, "DUPLICATE_PUSH push_id={}", push_id)?;
-            },
+            }
 
             Frame::Unknown => {
                 write!(f, "UNKNOWN")?;
-            },
+            }
         }
 
         Ok(())
@@ -314,15 +318,15 @@ fn parse_settings_frame(
         match setting_ty {
             SETTINGS_QPACK_MAX_TABLE_CAPACITY => {
                 qpack_max_table_capacity = Some(settings_val);
-            },
+            }
 
             SETTINGS_MAX_HEADER_LIST_SIZE => {
                 max_header_list_size = Some(settings_val);
-            },
+            }
 
             SETTINGS_QPACK_BLOCKED_STREAMS => {
                 qpack_blocked_streams = Some(settings_val);
-            },
+            }
 
             // Unknown Settings parameters must be ignored.
             _ => (),

@@ -24,10 +24,9 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::ffi;
-use std::ptr;
-use std::slice;
-use std::sync::atomic;
+use core::ptr;
+use core::slice;
+use core::sync::atomic;
 
 use libc::c_char;
 use libc::c_int;
@@ -43,9 +42,106 @@ pub extern fn quiche_version() -> *const u8 {
     VERSION.as_ptr()
 }
 
+/// A `no_std` compatible version of `std::ffi::CStr`.
+pub struct CStr {
+    inner: [c_char],
+}
+
+impl CStr {
+    pub unsafe fn from_ptr<'a>(ptr: *const c_char) -> &'a CStr {
+        let mut len = 0;
+        for i in 0.. {
+            if *ptr.offset(i) == 0 {
+                len = i;
+                break;
+            }
+        }
+        let ptr = ptr as *const u8;
+        CStr::from_bytes_with_nul_unchecked(slice::from_raw_parts(
+            ptr,
+            len as usize + 1,
+        ))
+    }
+
+    #[inline]
+    pub fn to_bytes_with_nul(&self) -> &[u8] {
+        unsafe { &*(&self.inner as *const [c_char] as *const [u8]) }
+    }
+
+    pub fn to_bytes(&self) -> &[u8] {
+        let bytes = self.to_bytes_with_nul();
+        &bytes[..bytes.len() - 1]
+    }
+
+    pub fn to_str(&self) -> core::result::Result<&str, core::str::Utf8Error> {
+        core::str::from_utf8(self.to_bytes())
+    }
+
+    pub const fn as_ptr(&self) -> *const c_char {
+        self.inner.as_ptr()
+    }
+
+    pub unsafe fn from_bytes_with_nul_unchecked(bytes: &[u8]) -> &CStr {
+        &*(bytes as *const [u8] as *const CStr)
+    }
+}
+
+/// A `no_std` compatible version of `std::ffi::CString`.
+#[derive(PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
+pub struct CString {
+    // Invariant 1: the slice ends with a zero byte and has a length of at least one.
+    // Invariant 2: the slice contains only one zero byte.
+    // Improper usage of unsafe function can break Invariant 2, but not Invariant 1.
+    inner: Box<[u8]>,
+}
+
+pub struct NulError;
+
+impl CString {
+    /// Create a new CString
+    pub fn new<T: Into<Vec<u8>>>(
+        t: T,
+    ) -> core::result::Result<CString, NulError> {
+        Self::_new(t.into())
+    }
+
+    /// Get a byte slice, including the null terminator.
+    pub fn as_bytes_with_nul(&self) -> &[u8] {
+        &self.inner
+    }
+
+    /// Create a new `CString` from a Vec of bytes. A null is added
+    /// automatically.
+    pub unsafe fn from_vec_unchecked(mut v: Vec<u8>) -> CString {
+        v.reserve_exact(1);
+        v.push(0);
+        CString {
+            inner: v.into_boxed_slice(),
+        }
+    }
+
+    fn _new(bytes: Vec<u8>) -> core::result::Result<CString, NulError> {
+        for b in bytes.iter() {
+            if *b == 0 {
+                return Err(NulError);
+            }
+        }
+        Ok(unsafe { CString::from_vec_unchecked(bytes) })
+    }
+}
+
+impl core::ops::Deref for CString {
+    type Target = CStr;
+
+    #[inline]
+    fn deref(&self) -> &CStr {
+        unsafe { CStr::from_bytes_with_nul_unchecked(self.as_bytes_with_nul()) }
+    }
+}
+
 struct Logger {
     cb: extern fn(line: *const u8, argp: *mut c_void),
-    argp: std::sync::atomic::AtomicPtr<c_void>,
+    argp: core::sync::atomic::AtomicPtr<c_void>,
 }
 
 impl log::Log for Logger {
@@ -83,32 +179,6 @@ pub extern fn quiche_config_new(version: u32) -> *mut Config {
         Ok(c) => Box::into_raw(Box::new(c)),
 
         Err(_) => ptr::null_mut(),
-    }
-}
-
-#[no_mangle]
-pub extern fn quiche_config_load_cert_chain_from_pem_file(
-    config: &mut Config, path: *const c_char,
-) -> c_int {
-    let path = unsafe { ffi::CStr::from_ptr(path).to_str().unwrap() };
-
-    match config.load_cert_chain_from_pem_file(path) {
-        Ok(_) => 0,
-
-        Err(e) => e.to_c() as c_int,
-    }
-}
-
-#[no_mangle]
-pub extern fn quiche_config_load_priv_key_from_pem_file(
-    config: &mut Config, path: *const c_char,
-) -> c_int {
-    let path = unsafe { ffi::CStr::from_ptr(path).to_str().unwrap() };
-
-    match config.load_priv_key_from_pem_file(path) {
-        Ok(_) => 0,
-
-        Err(e) => e.to_c() as c_int,
     }
 }
 
@@ -273,7 +343,7 @@ pub extern fn quiche_header_info(
                 token.copy_from_slice(&tok);
 
                 *token_len = tok.len();
-            },
+            }
 
             None => *token_len = 0,
         }
@@ -310,7 +380,7 @@ pub extern fn quiche_connect(
     let server_name = if server_name.is_null() {
         None
     } else {
-        Some(unsafe { ffi::CStr::from_ptr(server_name).to_str().unwrap() })
+        Some(unsafe { CStr::from_ptr(server_name).to_str().unwrap() })
     };
 
     let scid = unsafe { slice::from_raw_parts(scid, scid_len) };
@@ -511,7 +581,7 @@ pub extern fn quiche_conn_timeout_as_nanos(conn: &mut Connection) -> u64 {
     match conn.timeout() {
         Some(timeout) => timeout.as_nanos() as u64,
 
-        None => std::u64::MAX,
+        None => core::u64::MAX,
     }
 }
 
@@ -520,7 +590,7 @@ pub extern fn quiche_conn_timeout_as_millis(conn: &mut Connection) -> u64 {
     match conn.timeout() {
         Some(timeout) => timeout.as_millis() as u64,
 
-        None => std::u64::MAX,
+        None => core::u64::MAX,
     }
 }
 

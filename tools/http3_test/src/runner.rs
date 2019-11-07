@@ -155,7 +155,7 @@ pub fn run(
                     }
 
                     panic!("recv() failed: {:?}", e);
-                },
+                }
             };
 
             debug!("got {} bytes", len);
@@ -167,12 +167,12 @@ pub fn run(
                 Err(quiche::Error::Done) => {
                     debug!("done reading");
                     break;
-                },
+                }
 
                 Err(e) => {
                     error!("recv failed: {:?}", e);
                     break 'read;
-                },
+                }
             };
 
             debug!("processed {} bytes", read);
@@ -216,7 +216,7 @@ pub fn run(
                         );
 
                         test.add_response_headers(stream_id, &list);
-                    },
+                    }
 
                     Ok((stream_id, quiche::h3::Event::Data)) => {
                         if let Ok(read) =
@@ -229,7 +229,7 @@ pub fn run(
 
                             test.add_response_body(stream_id, &buf, read);
                         }
-                    },
+                    }
 
                     Ok((_stream_id, quiche::h3::Event::Finished)) => {
                         reqs_complete += 1;
@@ -264,17 +264,17 @@ pub fn run(
                             Err(quiche::h3::Error::Done) => (),
                             Err(e) => panic!("error sending request {:?}", e),
                         }
-                    },
+                    }
 
                     Err(quiche::h3::Error::Done) => {
                         break;
-                    },
+                    }
 
                     Err(e) => {
                         error!("HTTP/3 processing failed: {:?}", e);
 
                         break;
-                    },
+                    }
                 }
             }
         }
@@ -288,13 +288,13 @@ pub fn run(
                 Err(quiche::Error::Done) => {
                     debug!("done writing");
                     break;
-                },
+                }
 
                 Err(e) => {
                     error!("send failed: {:?}", e);
                     conn.close(false, 0x1, b"fail").ok();
                     break;
-                },
+                }
             };
 
             if let Err(e) = socket.send(&out[..write]) {

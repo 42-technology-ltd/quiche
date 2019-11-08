@@ -144,7 +144,8 @@ impl Context {
 
     #[cfg(not(windows))]
     fn load_ca_certs(&mut self) -> Result<()> {
-        unsafe { map_result(SSL_CTX_set_default_verify_paths(self.as_ptr())) }
+        // unsafe { map_result(SSL_CTX_set_default_verify_paths(self.as_ptr())) }
+        Ok(())
     }
 
     #[cfg(windows)]

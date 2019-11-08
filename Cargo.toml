@@ -47,13 +47,16 @@ fuzzing = []
 default-features = false
 
 [build-dependencies]
-cmake = "0.1"
+# cmake = "0.1"
+cmake = { git = "https://github.com/alexcrichton/cmake-rs" }
 
 [dependencies]
-log = { version = "0.4", features = ["std"] }
-libc = "0.2"
-ring = "0.16"
-lazy_static = "1"
+log = { version = "0.4", default_features = false  }
+# libc = { version = "0.2", default_features = false }
+libc = { path = "../libc", default_features = false }
+# ring = { version = "0.16", default_features = false }
+ring = { path = "../ring", default_features = false }
+lazy_static = { version = "1", features = ["spin_no_std"] }
 
 [target."cfg(windows)".dependencies]
 winapi = { version = "0.3", features = ["wincrypt"] }
@@ -63,16 +66,13 @@ mio = "0.6"
 url = "1"
 docopt = "1"
 criterion = "0.3"
-env_logger = "0.6"
+# env_logger = "0.6"
 
 [profile.bench]
 debug = true
 
 [profile.release]
 debug = true
-
-[lib]
-crate-type = ["lib", "staticlib", "cdylib"]
 
 [[bench]]
 name = "benches"

@@ -1,60 +1,84 @@
 // Additional parameters for Android build of BoringSSL.
 const CMAKE_PARAMS_ANDROID: &[(&str, &[(&str, &str)])] = &[
-    ("aarch64", &[
-        ("ANDROID_TOOLCHAIN_NAME", "aarch64-linux-android-4.9"),
-        ("ANDROID_NATIVE_API_LEVEL", "21"),
-        (
-            "CMAKE_TOOLCHAIN_FILE",
-            "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
-        ),
-        ("ANDROID_STL", "c++_shared"),
-    ]),
-    ("arm", &[
-        ("ANDROID_TOOLCHAIN_NAME", "arm-linux-androideabi-4.9"),
-        ("ANDROID_NATIVE_API_LEVEL", "21"),
-        (
-            "CMAKE_TOOLCHAIN_FILE",
-            "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
-        ),
-        ("ANDROID_STL", "c++_shared"),
-    ]),
-    ("x86", &[
-        ("ANDROID_TOOLCHAIN_NAME", "x86-linux-android-4.9"),
-        ("ANDROID_NATIVE_API_LEVEL", "21"),
-        (
-            "CMAKE_TOOLCHAIN_FILE",
-            "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
-        ),
-        ("ANDROID_STL", "c++_shared"),
-    ]),
-    ("x86_64", &[
-        ("ANDROID_TOOLCHAIN_NAME", "x86_64-linux-android-4.9"),
-        ("ANDROID_NATIVE_API_LEVEL", "21"),
-        (
-            "CMAKE_TOOLCHAIN_FILE",
-            "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
-        ),
-        ("ANDROID_STL", "c++_shared"),
-    ]),
+    (
+        "aarch64",
+        &[
+            ("ANDROID_TOOLCHAIN_NAME", "aarch64-linux-android-4.9"),
+            ("ANDROID_NATIVE_API_LEVEL", "21"),
+            (
+                "CMAKE_TOOLCHAIN_FILE",
+                "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+            ),
+            ("ANDROID_STL", "c++_shared"),
+        ],
+    ),
+    (
+        "arm",
+        &[
+            ("ANDROID_TOOLCHAIN_NAME", "arm-linux-androideabi-4.9"),
+            ("ANDROID_NATIVE_API_LEVEL", "21"),
+            (
+                "CMAKE_TOOLCHAIN_FILE",
+                "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+            ),
+            ("ANDROID_STL", "c++_shared"),
+        ],
+    ),
+    (
+        "x86",
+        &[
+            ("ANDROID_TOOLCHAIN_NAME", "x86-linux-android-4.9"),
+            ("ANDROID_NATIVE_API_LEVEL", "21"),
+            (
+                "CMAKE_TOOLCHAIN_FILE",
+                "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+            ),
+            ("ANDROID_STL", "c++_shared"),
+        ],
+    ),
+    (
+        "x86_64",
+        &[
+            ("ANDROID_TOOLCHAIN_NAME", "x86_64-linux-android-4.9"),
+            ("ANDROID_NATIVE_API_LEVEL", "21"),
+            (
+                "CMAKE_TOOLCHAIN_FILE",
+                "${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+            ),
+            ("ANDROID_STL", "c++_shared"),
+        ],
+    ),
 ];
 
 const CMAKE_PARAMS_IOS: &[(&str, &[(&str, &str)])] = &[
-    ("aarch64", &[
-        ("CMAKE_OSX_ARCHITECTURES", "arm64"),
-        ("CMAKE_OSX_SYSROOT", "iphoneos"),
-    ]),
-    ("arm", &[
-        ("CMAKE_OSX_ARCHITECTURES", "arm"),
-        ("CMAKE_OSX_SYSROOT", "iphoneos"),
-    ]),
-    ("x86", &[
-        ("CMAKE_OSX_ARCHITECTURES", "x86"),
-        ("CMAKE_OSX_SYSROOT", "iphonesimulator"),
-    ]),
-    ("x86_64", &[
-        ("CMAKE_OSX_ARCHITECTURES", "x86_64"),
-        ("CMAKE_OSX_SYSROOT", "iphonesimulator"),
-    ]),
+    (
+        "aarch64",
+        &[
+            ("CMAKE_OSX_ARCHITECTURES", "arm64"),
+            ("CMAKE_OSX_SYSROOT", "iphoneos"),
+        ],
+    ),
+    (
+        "arm",
+        &[
+            ("CMAKE_OSX_ARCHITECTURES", "arm"),
+            ("CMAKE_OSX_SYSROOT", "iphoneos"),
+        ],
+    ),
+    (
+        "x86",
+        &[
+            ("CMAKE_OSX_ARCHITECTURES", "x86"),
+            ("CMAKE_OSX_SYSROOT", "iphonesimulator"),
+        ],
+    ),
+    (
+        "x86_64",
+        &[
+            ("CMAKE_OSX_ARCHITECTURES", "x86_64"),
+            ("CMAKE_OSX_SYSROOT", "iphonesimulator"),
+        ],
+    ),
 ];
 
 /// Returns the platform-specific output path for lib.
@@ -101,7 +125,7 @@ fn get_boringssl_cmake_config() -> cmake::Config {
             }
 
             boringssl_cmake
-        },
+        }
 
         "ios" => {
             for (ios_arch, params) in CMAKE_PARAMS_IOS {
@@ -118,7 +142,15 @@ fn get_boringssl_cmake_config() -> cmake::Config {
             boringssl_cmake.cflag("-fembed-bitcode");
 
             boringssl_cmake
-        },
+        }
+
+        "none" => {
+            boringssl_cmake.define("OPENSSL_SMALL", "1");
+            boringssl_cmake.define("OPENSSL_NO_STDIO", "1");
+            boringssl_cmake.pic(false);
+            boringssl_cmake.build_arg("BUILD_SHARED_LIBS=OFF");
+            boringssl_cmake
+        }
 
         _ => boringssl_cmake,
     };
@@ -166,7 +198,7 @@ fn main() {
                     .cxxflag("-DBORINGSSL_UNSAFE_FUZZER_MODE");
             }
 
-            cfg.build_target("bssl").build().display().to_string()
+            cfg.build_target("ssl").build().display().to_string()
         });
 
         let crypto_path = get_boringssl_platform_output_path("crypto");

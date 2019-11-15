@@ -64,9 +64,8 @@ pub enum Algorithm {
 
     #[allow(non_camel_case_types)]
     AES256_GCM,
-
-    #[allow(non_camel_case_types)]
-    ChaCha20_Poly1305,
+    // #[allow(non_camel_case_types)]
+    // ChaCha20_Poly1305,
 }
 
 impl Algorithm {
@@ -74,7 +73,7 @@ impl Algorithm {
         match self {
             Algorithm::AES128_GCM => &aead::AES_128_GCM,
             Algorithm::AES256_GCM => &aead::AES_256_GCM,
-            Algorithm::ChaCha20_Poly1305 => &aead::CHACHA20_POLY1305,
+            // Algorithm::ChaCha20_Poly1305 => &aead::CHACHA20_POLY1305,
         }
     }
 
@@ -82,7 +81,7 @@ impl Algorithm {
         match self {
             Algorithm::AES128_GCM => &aead::quic::AES_128,
             Algorithm::AES256_GCM => &aead::quic::AES_256,
-            Algorithm::ChaCha20_Poly1305 => &aead::quic::CHACHA20,
+            // Algorithm::ChaCha20_Poly1305 => &aead::quic::CHACHA20,
         }
     }
 
@@ -90,7 +89,7 @@ impl Algorithm {
         match self {
             Algorithm::AES128_GCM => hkdf::HKDF_SHA256,
             Algorithm::AES256_GCM => hkdf::HKDF_SHA384,
-            Algorithm::ChaCha20_Poly1305 => hkdf::HKDF_SHA256,
+            // Algorithm::ChaCha20_Poly1305 => hkdf::HKDF_SHA256,
         }
     }
 

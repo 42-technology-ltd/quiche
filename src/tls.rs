@@ -472,7 +472,7 @@ fn get_cipher_from_ptr(ptr: *mut SSL) -> Result<crypto::Algorithm> {
     let alg = match cipher_id {
         0x0300_1301 => crypto::Algorithm::AES128_GCM,
         0x0300_1302 => crypto::Algorithm::AES256_GCM,
-        // 0x0300_1303 => crypto::Algorithm::ChaCha20_Poly1305,
+        0x0300_1303 => crypto::Algorithm::ChaCha20_Poly1305,
         _ => return Err(Error::TlsFail),
     };
 

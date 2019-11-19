@@ -66,7 +66,8 @@ mio = "0.6"
 url = "1"
 docopt = "1"
 criterion = "0.3"
-# env_logger = "0.6"
+env_logger = "0.6"
+rand = "0.7"
 
 [profile.bench]
 debug = true

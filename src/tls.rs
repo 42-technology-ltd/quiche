@@ -128,9 +128,7 @@ impl Context {
             let ctx_raw = SSL_CTX_new(TLS_method());
 
             let mut ctx = Context(ctx_raw);
-
             ctx.load_ca_certs()?;
-
             Ok(ctx)
         }
     }
@@ -142,9 +140,15 @@ impl Context {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "none")]
     fn load_ca_certs(&mut self) -> Result<()> {
-        // unsafe { map_result(SSL_CTX_set_default_verify_paths(self.as_ptr())) }
+        // Do nothing
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "none", target_os = "windows")))]
+    fn load_ca_certs(&mut self) -> Result<()> {
+        unsafe { map_result(SSL_CTX_set_default_verify_paths(self.as_ptr()))? };
         Ok(())
     }
 
@@ -498,15 +502,12 @@ extern fn set_encryption_secrets(
 
     let space = match level {
         crypto::Level::Initial => &mut conn.pkt_num_spaces[packet::EPOCH_INITIAL],
-        crypto::Level::ZeroRTT => {
-            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION]
-        }
-        crypto::Level::Handshake => {
-            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE]
-        }
-        crypto::Level::OneRTT => {
-            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION]
-        }
+        crypto::Level::ZeroRTT =>
+            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION],
+        crypto::Level::Handshake =>
+            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE],
+        crypto::Level::OneRTT =>
+            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION],
     };
 
     let aead = match get_cipher_from_ptr(ssl) {
@@ -602,12 +603,10 @@ extern fn add_handshake_data(
     let space = match level {
         crypto::Level::Initial => &mut conn.pkt_num_spaces[packet::EPOCH_INITIAL],
         crypto::Level::ZeroRTT => unreachable!(),
-        crypto::Level::Handshake => {
-            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE]
-        }
-        crypto::Level::OneRTT => {
-            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION]
-        }
+        crypto::Level::Handshake =>
+            &mut conn.pkt_num_spaces[packet::EPOCH_HANDSHAKE],
+        crypto::Level::OneRTT =>
+            &mut conn.pkt_num_spaces[packet::EPOCH_APPLICATION],
     };
 
     if space.crypto_stream.send.push_slice(buf, false).is_err() {
@@ -670,8 +669,8 @@ extern fn select_alpn(
 
     while let Ok(proto) = protos.get_bytes_with_u8_length() {
         let found = conn.application_protos.iter().any(|expected| {
-            if expected.len() == proto.len()
-                && expected.as_slice() == proto.as_ref()
+            if expected.len() == proto.len() &&
+                expected.as_slice() == proto.as_ref()
             {
                 unsafe {
                     *out = expected.as_slice().as_ptr();
@@ -725,7 +724,7 @@ fn map_result_ssl(ssl: &Handshake, bssl_result: c_int) -> Result<()> {
                     log_ssl_error();
 
                     Err(Error::TlsFail)
-                }
+                },
 
                 // SSL_ERROR_WANT_READ
                 2 => Err(Error::Done),
@@ -750,7 +749,7 @@ fn map_result_ssl(ssl: &Handshake, bssl_result: c_int) -> Result<()> {
 
                 _ => Err(Error::TlsFail),
             }
-        }
+        },
     }
 }
 
@@ -773,7 +772,7 @@ extern {
     fn SSL_CTX_new(method: *const SSL_METHOD) -> *mut SSL_CTX;
     fn SSL_CTX_free(ctx: *mut SSL_CTX);
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(target_os = "none", target_os = "windows")))]
     fn SSL_CTX_set_default_verify_paths(ctx: *mut SSL_CTX) -> c_int;
 
     #[cfg(windows)]

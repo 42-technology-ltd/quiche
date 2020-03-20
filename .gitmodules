@@ -1,4 +1,4 @@
 [submodule "boringssl"]
 	path = deps/boringssl
-	url = git@bitbucket.org:42technology-es/boringssl.git
+	url = https://github.com/42-technology-ltd/boringssl
 	ignore = dirty
